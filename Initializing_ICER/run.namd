@@ -1,0 +1,126 @@
+set temperature         300.0
+set runnum [llength [glob -nocomplain run*dcd]]
+
+set freq                2500 
+set out                 [format "run%03d" $runnum]
+#set inp                equilibration
+set run                 4000000
+
+proc get_first_ts { xscfile } {
+        set fd [open $xscfile r]
+        gets $fd
+        gets $fd
+        gets $fd line
+        set ts [lindex $line 0]
+        close $fd
+        return $ts
+}
+if { $runnum == 0 } {
+	firsttimestep 0
+	set inputname eq
+        bincoordinates eq.coor
+        binvelocities eq.vel
+	extendedsystem eq.xsc
+} else {
+	set inputname [format "run%03d" [expr {$runnum - 1}]]
+	set firsttime [get_first_ts ./$inputname.xsc]
+	if { $firsttime > 500000000 } {
+		exit
+	} else {
+		firsttimestep $firsttime
+	 	bincoordinates     ./$inputname.coor
+		binvelocities      ./$inputname.vel
+		extendedSystem     ./$inputname.xsc
+	}
+}
+
+# Input files
+paraTypeCharmm          on
+parameters              ./toppar/par_all36_pcw.prm
+parameters              ./toppar/par_all36_prot.prm
+parameters              ./toppar/par_all36_lipid.prm
+parameters toppar_all36_carb_lignin_edited.str
+parameters hemimissing.prm
+parameters par_misc.prm
+parameters xy1.prm
+#parameters 			../toppar/toppar_all36_prot_heme.str
+#parameters				../toppar/oxygen.str
+
+coordinates             acetylatedsystemfull.pdb
+structure               acetylatedsystemfull.psf
+
+# Output files
+outputname              $out
+restartname             $out
+DCDfile                 $out.dcd
+binaryoutput            yes
+binaryrestart           yes
+restartfreq             $freq
+DCDfreq                 $freq
+DCDUnitCell             yes
+
+# Standard Output
+outputEnergies          500
+outputtiming            $freq
+
+# Non-bonded force field parameters
+cutoff                  12.0
+switching 		on
+switchdist 		10. 
+exclude                 scaled1-4
+dielectric              1.0
+nonbondedscaling        1.0
+1-4scaling              1.0 ; #1.0 is for CHARMM 1/1.2 is for OPLS.
+limitdist               0.
+pairlistdist            13.0
+rigidbonds              none
+ljcorrection		on
+#margin 5
+
+# Particle-mesh Ewald Sum
+PME                     yes
+#PMEGridSizeX 		72
+#PMEGridSizeY 		72
+#PMEGridSizeZ 		216 
+PMEGridSpacing          1.2
+
+#Pressure control
+useGroupPressure 	 yes ;# needed for rigidBonds
+useFlexibleCell 	 yes
+useConstantRatio	 yes 
+LangevinPiston on
+LangevinPistonTarget 1.01325
+LangevinPistonPeriod 200
+LangevinPistonDecay 100
+LangevinPistonTemp $temperature
+
+# Integrator Parameters
+nonbondedFreq           1
+fullElectFrequency      2 
+stepspercycle           10
+
+# Periodic boundary conditions
+wrapAll                 on
+
+# Dynamics
+
+timestep                2.0
+#firsttimestep           0
+#temperature            $temperature
+
+# Temperature scaling
+langevin on
+langevinTemp $temperature
+langevinDamping 5.0
+langevinHydrogen off
+
+#minimize 1000 
+#reinitvels $temperature 
+
+CUDASOAintegrate on
+
+# Run
+run                     $run
+
+
+
